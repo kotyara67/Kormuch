@@ -17,7 +17,10 @@ RtcDS1302<ThreeWire> Rtc(myWire);
 #define BUTTON_PIN_LEFT 5
 #define BUTTON_PIN_RIGHT 4
 
-#define LED_PIN 13
+// Пины для TB6600
+#define STEP_PIN 11 // PUL
+#define DIR_PIN 12	// DIR
+#define ENA_PIN 13	// ENA
 
 // Обьекты Bounce
 Bounce button_up = Bounce();
@@ -125,7 +128,7 @@ String options_to_print[5][3]{
 	{"_TIME_", "_LEFT_", "_BAR_"},
 	{"Date:", "Time:", ""},
 	{"Wake:", "Sleep:", ""},
-	{"Feeds:", "Kilos:", "Vibro:"},
+	{"Feeds:", "Revolutions:", "Vibro:"},
 	{"Save", "Load", ""}
 	// Дата Время       Дтя
 	// Утро Сон  Еда    дн
@@ -139,7 +142,10 @@ int option_values[2][3]{
 
 // Переменные для защиты от повторного срабатывания
 int lastFeedMinute = -1;
-int lastDate = -1; // номер дня в году (упрощённо)
+int lastDate = -1;
+
+const int stepsPerRevolution = 200; // для NEMA23 1.8° (200 шагов/оборот)
+int stepDelay = 1000;				// микросекунды между шагами (чем меньше, тем быстрее)
 
 String halfHoursToTime(int halfHours)
 {
@@ -219,11 +225,17 @@ void feed()
 	lcd.print("FEEDING IN");
 	lcd.setCursor(4, 2);
 	lcd.print("PROGRESS");
-	int feedDuration = option_values[1][1];
-	Serial.print("Feed");
-	digitalWrite(13, HIGH);
-	delay(feedDuration * 1000);
-	digitalWrite(13, LOW);
+	int feedRevs = option_values[1][1];
+
+	for (int i = 0; i < stepsPerRevolution * feedRevs; i++)
+	{
+		digitalWrite(STEP_PIN, HIGH);
+		delayMicroseconds(stepDelay);
+		digitalWrite(STEP_PIN, LOW);
+		delayMicroseconds(stepDelay);
+	}
+
+	initInt = 0;
 }
 
 void setup()
@@ -233,8 +245,16 @@ void setup()
 	lcd.backlight();
 	lcd.clear();
 
-	pinMode(13, OUTPUT);
-	digitalWrite(13, LOW);
+	// пины для драйвера
+	pinMode(STEP_PIN, OUTPUT);
+	pinMode(DIR_PIN, OUTPUT);
+	pinMode(ENA_PIN, OUTPUT);
+
+	// Включаем драйвер (активный LOW для ENA-)
+	digitalWrite(ENA_PIN, LOW);
+
+	// Начальное направление
+	digitalWrite(DIR_PIN, HIGH); // ПОМЕНЯТЬ НА LOW ДЛЯ ВРАЩЕНИЯ В ДРУГУЮ СТОРОНУ
 
 	Serial.begin(9600);		  // Установка последовательной связи на скорости 9600
 	Serial.print("Data: ");	  // Отправка данных на последовательный порт
@@ -271,7 +291,6 @@ void loop()
 	if (checkAndFeed(currentMinutes, currentDay))
 	{
 		feed();
-		Serial.println("Кормление выполнено");
 	}
 
 	// Update the Bounce instance
@@ -494,12 +513,12 @@ void loop()
 		lcd.print(":");
 		lcd.print(now.Second());
 
-		lcd.setCursor(1, 2);
-		lcd.print("Next feed:");
-		lcd.print(now.Hour());
-		lcd.print(":");
-		lcd.print(now.Minute());
-		lcd.print(":");
-		lcd.print(now.Second());
+		// lcd.setCursor(1, 2);
+		// lcd.print("Next feed:");
+		// lcd.print(now.Hour());
+		// lcd.print(":");
+		// lcd.print(now.Minute());
+		// lcd.print(":");
+		// lcd.print(now.Second());
 	}
 }
