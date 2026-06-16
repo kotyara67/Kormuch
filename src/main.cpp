@@ -57,7 +57,6 @@ int lastFeedMinute = -1;
 int lastDate = -1;
 
 const int stepsPerRevolution = 200; // для NEMA23 1.8° (200 шагов/оборот)
-int stepDelay = 1000;				// микросекунды между шагами (чем меньше, тем быстрее)
 
 String halfHoursToTime(int halfHours)
 {
@@ -82,17 +81,17 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 	int eveningTime = option_values[0][1];
 	// Если кормлений нет — выходим
 	if (feedCount <= 0)
-		return false;
-
+	return false;
+	
 	int morningMin = halfHoursToMinutes(morningTime);
 	int eveningMin = halfHoursToMinutes(eveningTime);
-
+	
 	// Текущее время вне периода?
 	if (currentMinutes < morningMin || currentMinutes > eveningMin)
 	{
 		return false;
 	}
-
+	
 	// Особый случай: одно кормление
 	if (feedCount == 1)
 	{
@@ -107,16 +106,16 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 		}
 		return false;
 	}
-
+	
 	// Несколько кормлений: вычисляем ближайшее
 	float interval = (float)(eveningMin - morningMin) / (feedCount - 1);
 	float t = (currentMinutes - morningMin) / interval;
 	int k = round(t); // номер кормления от 0 до feedCount-1
-
+	
 	// Проверяем границы
 	if (k < 0 || k >= feedCount)
-		return false;
-
+	return false;
+	
 	float feedMin = morningMin + k * interval;
 	if (abs(currentMinutes - feedMin) <= 0.5)
 	{ // допуск 30 секунд
@@ -129,6 +128,8 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 	}
 	return false;
 }
+
+int stepDelay = 1000;				// микросекунды между шагами (чем меньше, тем быстрее)
 
 void feed()
 {
