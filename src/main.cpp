@@ -30,94 +30,6 @@ Bounce button_right = Bounce();
 
 // LCD
 LiquidCrystal_I2C lcd(0x27, 20, 4); // I2C address 0x27, 20 column and 4 rows
-// Символы
-//  byte rus_char_D[] = {
-//    B00011,
-//    B00101,
-//    B00101,
-//    B01001,
-//    B01001,
-//    B11111,
-//    B10001,
-//    B00000
-//  };
-
-// byte rus_char_t[] = {
-//   B00000,
-//   B00000,
-//   B01110,
-//   B00100,
-//   B00100,
-//   B00100,
-//   B00100,
-//   B00000
-// };
-
-// byte rus_char_ya[] = {
-//   B00000,
-//   B00000,
-//   B00110,
-//   B01010,
-//   B00110,
-//   B01010,
-//   B01010,
-//   B00000
-// };
-
-// byte rus_char_d[] = {
-//   B00000,
-//   B00000,
-//   B00110,
-//   B01010,
-//   B01010,
-//   B11110,
-//   B10010,
-//   B00000
-// };
-
-// byte rus_char_n[] = {
-//   B00000,
-//   B00000,
-//   B10010,
-//   B10010,
-//   B11110,
-//   B10010,
-//   B10010,
-//   B00000
-// };
-
-// byte rus_char_i[] = {
-//   B00000,
-//   B00000,
-//   B10010,
-//   B10010,
-//   B10110,
-//   B11010,
-//   B10010,
-//   B00000
-// };
-
-// byte rus_char_l[] = {
-//   B00000,
-//   B00000,
-//   B01111,
-//   B01001,
-//   B01001,
-//   B01001,
-//   B10001,
-//   B00000
-// };
-
-// byte rus_char_g[] = {
-//   B00000,
-//   B00000,
-//   B11100,
-//   B10000,
-//   B10000,
-//   B10000,
-//   B10000,
-//   B00000
-// };
 
 int line = 0;
 int tab = 0;
@@ -220,6 +132,7 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 
 void feed()
 {
+	digitalWrite(ENA_PIN, LOW);
 	lcd.clear();
 	lcd.setCursor(2, 1);
 	lcd.print("FEEDING IN");
@@ -234,6 +147,8 @@ void feed()
 		digitalWrite(STEP_PIN, LOW);
 		delayMicroseconds(stepDelay);
 	}
+
+	digitalWrite(ENA_PIN, HIGH);
 
 	initInt = 0;
 }
@@ -251,7 +166,7 @@ void setup()
 	pinMode(ENA_PIN, OUTPUT);
 
 	// Включаем драйвер (активный LOW для ENA-)
-	digitalWrite(ENA_PIN, LOW);
+	digitalWrite(ENA_PIN, HIGH);
 
 	// Начальное направление
 	digitalWrite(DIR_PIN, HIGH); // ПОМЕНЯТЬ НА LOW ДЛЯ ВРАЩЕНИЯ В ДРУГУЮ СТОРОНУ
@@ -282,6 +197,14 @@ int tick = 0;
 
 void loop()
 {
+	static uint32_t afkTimer = 0;
+
+	if (millis() - afkTimer >= 10000)
+	{
+		afkTimer = millis(); // сброс таймера
+		lcd.noDisplay();
+	}
+
 	// Rtc.GetDateTime();
 	RtcDateTime now = Rtc.GetDateTime();
 
@@ -446,6 +369,7 @@ void loop()
 	{
 		initInt = 1;
 		// LCD
+		lcd.display();
 		lcd.clear();
 		lcd.setCursor(0, 0);
 		lcd.print(" i  &  @  #  s");
