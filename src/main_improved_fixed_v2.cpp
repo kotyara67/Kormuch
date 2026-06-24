@@ -20,7 +20,7 @@ RtcDS1302<ThreeWire> Rtc(myWire);
 // Пины для TB6600
 #define STEP_PIN 11 // PUL
 #define DIR_PIN 12	// DIR
-#define ENA_PIN 13	// ENA
+#define ENA_PIN 3	// ENA
 
 // Обьекты Bounce
 Bounce button_up = Bounce();
@@ -41,7 +41,7 @@ String options_to_print[5][3]{
 	{"Date:", "Time:", ""},
 	{"Wake:", "Sleep:", ""},
 	{"Feeds:", "Revolutions:", "Vibro:"},
-	{"Save", "Load", ""}
+	{"Save", "Load", "TEST FEED"}
 	// Дата Время       Дтя
 	// Утро Сон  Еда    дн
 	// Корм Кило Вибро  ил
@@ -81,17 +81,17 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 	int eveningTime = option_values[0][1];
 	// Если кормлений нет — выходим
 	if (feedCount <= 0)
-	return false;
-	
+		return false;
+
 	int morningMin = halfHoursToMinutes(morningTime);
 	int eveningMin = halfHoursToMinutes(eveningTime);
-	
+
 	// Текущее время вне периода?
 	if (currentMinutes < morningMin || currentMinutes > eveningMin)
 	{
 		return false;
 	}
-	
+
 	// Особый случай: одно кормление
 	if (feedCount == 1)
 	{
@@ -106,16 +106,16 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 		}
 		return false;
 	}
-	
+
 	// Несколько кормлений: вычисляем ближайшее
 	float interval = (float)(eveningMin - morningMin) / (feedCount - 1);
 	float t = (currentMinutes - morningMin) / interval;
 	int k = round(t); // номер кормления от 0 до feedCount-1
-	
+
 	// Проверяем границы
 	if (k < 0 || k >= feedCount)
-	return false;
-	
+		return false;
+
 	float feedMin = morningMin + k * interval;
 	if (abs(currentMinutes - feedMin) <= 0.5)
 	{ // допуск 30 секунд
@@ -129,11 +129,12 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 	return false;
 }
 
-int stepDelay = 1000;				// микросекунды между шагами (чем меньше, тем быстрее)
+int stepDelay = 200; // микросекунды между шагами (чем меньше, тем быстрее)
 
 void feed()
 {
 	digitalWrite(ENA_PIN, LOW);
+	delay(2);
 	lcd.clear();
 	lcd.setCursor(2, 1);
 	lcd.print("FEEDING IN");
@@ -149,7 +150,7 @@ void feed()
 		delayMicroseconds(stepDelay);
 	}
 
-	digitalWrite(ENA_PIN, HIGH);
+	digitalWrite(ENA_PIN, HIGH); // отключить драйвер
 
 	initInt = 0;
 }
@@ -166,11 +167,11 @@ void setup()
 	pinMode(DIR_PIN, OUTPUT);
 	pinMode(ENA_PIN, OUTPUT);
 
-	// Включаем драйвер (активный LOW для ENA-)
+	// Драйвер отключен по умолчанию (активный LOW)
 	digitalWrite(ENA_PIN, HIGH);
 
 	// Начальное направление
-	digitalWrite(DIR_PIN, HIGH); // ПОМЕНЯТЬ НА LOW ДЛЯ ВРАЩЕНИЯ В ДРУГУЮ СТОРОНУ
+	digitalWrite(DIR_PIN, LOW); // ПОМЕНЯТЬ НА LOW ДЛЯ ВРАЩЕНИЯ В ДРУГУЮ СТОРОНУ
 
 	Serial.begin(9600);		  // Установка последовательной связи на скорости 9600
 	Serial.print("Data: ");	  // Отправка данных на последовательный порт
@@ -180,8 +181,8 @@ void setup()
 	// Инициализация RTC
 	Rtc.Begin();
 	RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__); // Копирование даты и времени в compiled
-	Rtc.SetDateTime(compiled);								// Установка времени
-	Serial.println();										// Отправка данных на последовательный порт
+	// Rtc.SetDateTime(compiled); // не сбрасывать время при каждом запуске								// Установка времени
+	Serial.println(); // Отправка данных на последовательный порт
 
 	// Настройка Bounce
 	button_up.attach(BUTTON_PIN_UP, INPUT_PULLUP); // USE INTERNAL PULL-UP
@@ -203,7 +204,6 @@ void loop()
 	if (millis() - afkTimer >= 10000)
 	{
 		afkTimer = millis(); // сброс таймера
-		lcd.noDisplay();
 	}
 
 	// Rtc.GetDateTime();
@@ -301,6 +301,10 @@ void loop()
 				option_values[1][0] = feeds;
 				option_values[1][1] = kilos;
 				option_values[1][2] = vibro;
+			}
+			else if (tab == 4 && line == 3)
+			{
+				feed();
 			}
 		}
 	}
@@ -430,13 +434,12 @@ void loop()
 	// Serial.print(tab);
 	if (millis() % 1000 > 0 && millis() % 1000 < 100 && tab == 0)
 	{
+		char buf[9];
+		sprintf(buf, "%02u:%02u:%02u", now.Hour(), now.Minute(), now.Second());
 		lcd.setCursor(1, 1);
-		lcd.print("Time:");
-		lcd.print(now.Hour());
-		lcd.print(":");
-		lcd.print(now.Minute());
-		lcd.print(":");
-		lcd.print(now.Second());
+		lcd.print("Time:        ");
+		lcd.setCursor(6, 1);
+		lcd.print(buf);
 
 		// lcd.setCursor(1, 2);
 		// lcd.print("Next feed:");
