@@ -238,6 +238,14 @@ void setup()
 	button_left.interval(10);
 	button_right.attach(BUTTON_PIN_RIGHT, INPUT_PULLUP);
 	button_right.interval(10);
+
+	// load
+	int feeds = 0;
+	int kilos = 0;
+	EEPROM.get(0 * 4, feeds);
+	EEPROM.get(1 * 4, kilos);
+	option_values[0] = feeds;
+	option_values[1] = kilos;
 }
 
 int tick = 0;
