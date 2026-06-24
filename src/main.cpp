@@ -1,3 +1,17 @@
+// НАСТРОЙКА ПАРАМЕТРОВ ПОВЕДЕНИЯ
+
+int time_morning = 12; // В получасах. 12 = 6 утра
+int time_sleep = 44;   // Я хз что будет, если выставить time_morning <= time_sleep. Проверять не рекомендуется.
+// int mins_to_afk = 10;  // период неактивности
+
+int option_values[3]{
+	3, // кол-во кормлений
+	5, // килограммы (в теории)
+
+	0 // ОНО ТУТ НАДО. из интерфейса кормушки можно случийно получить доступ к третьей опции, хотя у нас ее нет.
+	  // Однако программа все равно попытается изменить значение вне диапозона массива. 0 предотвращает краш программы.
+};
+
 #include <Arduino.h>
 // Либа для устранения дребезга
 #include <Bounce2.h>
@@ -8,7 +22,7 @@
 // RTC
 #include <RtcDS1302.h>
 
-ThreeWire myWire(9, 8, 10); // DAT, CLK, RST 7 6 8 -> 9 8 10
+ThreeWire myWire(9, 8, 10); // DAT, CLK, RST
 RtcDS1302<ThreeWire> Rtc(myWire);
 
 // Пины кнопок
@@ -21,6 +35,9 @@ RtcDS1302<ThreeWire> Rtc(myWire);
 #define STEP_PIN 11 // PUL
 #define DIR_PIN 12	// DIR
 #define ENA_PIN 3	// ENA
+
+// Пин "АФК" транзистора
+// #define STEP_PIN 13 // AFK
 
 // Обьекты Bounce
 Bounce button_up = Bounce();
@@ -36,21 +53,17 @@ int tab = 0;
 
 int initInt = 0;
 
-String options_to_print[5][3]{
-	{"_TIME_", "_LEFT_", "_BAR_"},
-	{"Date:", "Time:", ""},
-	{"Wake:", "Sleep:", ""},
-	{"Feeds:", "Revolutions:", "Vibro:"},
+// static uint32_t afkTimer = 0;
+
+String options_to_print[3][3]{
+	{"Time:", "Next feed:", ""},
+	{"Feeds:", "Kilos:", ""},
 	{"Save", "Load", "TEST FEED"}
 	// Дата Время       Дтя
 	// Утро Сон  Еда    дн
 	// Корм Кило Вибро  ил
 	// Слот Сохр! Загр! г
 };
-
-int option_values[2][3]{
-	{12, 44, 0},
-	{3, 2, 5}};
 
 // Переменные для защиты от повторного срабатывания
 int lastFeedMinute = -1;
@@ -72,19 +85,51 @@ int halfHoursToMinutes(int half)
 	return half * 30;
 }
 
+// Авторство - DeepSeek
+int minutesUntilNextFeed(int currentMinutes)
+{
+	int morningMinutes = halfHoursToMinutes(time_morning);
+	int eveningMinutes = halfHoursToMinutes(time_sleep);
+	int feedCount = option_values[0];
+	if (feedCount <= 0)
+		return 0; // нет кормлений
+
+	if (feedCount == 1)
+	{
+		// одно кормление — всегда утром
+		if (currentMinutes < morningMinutes)
+			return morningMinutes - currentMinutes;
+		else
+			return (morningMinutes + 1440) - currentMinutes; // завтра
+	}
+
+	// Расчитываем интервал (в минутах)
+	int interval = (eveningMinutes - morningMinutes) / (feedCount - 1);
+
+	// Ищем первое кормление, которое строго позже текущего времени
+	for (int i = 0; i < feedCount; i++)
+	{
+		int feedTime = morningMinutes + i * interval;
+		if (feedTime > currentMinutes)
+		{
+			return feedTime - currentMinutes;
+		}
+	}
+
+	// Если все сегодняшние прошли — следующее завтра утром
+	return (morningMinutes + 1440) - currentMinutes;
+}
 // Проверяет, нужно ли кормить в текущий момент
 // Авторство - Deepseek
 bool checkAndFeed(int currentMinutes, int currentDay)
 {
-	int feedCount = option_values[1][0];
-	int morningTime = option_values[0][0];
-	int eveningTime = option_values[0][1];
+	int feedCount = option_values[0];
 	// Если кормлений нет — выходим
 	if (feedCount <= 0)
 		return false;
 
-	int morningMin = halfHoursToMinutes(morningTime);
-	int eveningMin = halfHoursToMinutes(eveningTime);
+	int morningMin = halfHoursToMinutes(time_morning);
+	int eveningMin = halfHoursToMinutes(time_sleep);
 
 	// Текущее время вне периода?
 	if (currentMinutes < morningMin || currentMinutes > eveningMin)
@@ -140,7 +185,7 @@ void feed()
 	lcd.print("FEEDING IN");
 	lcd.setCursor(4, 2);
 	lcd.print("PROGRESS");
-	int feedRevs = option_values[1][1];
+	int feedRevs = option_values[1];
 
 	for (int i = 0; i < stepsPerRevolution * feedRevs; i++)
 	{
@@ -150,7 +195,7 @@ void feed()
 		delayMicroseconds(stepDelay);
 	}
 
-	digitalWrite(ENA_PIN, HIGH); // отключить драйвер
+	digitalWrite(ENA_PIN, HIGH); // отключить драйвер (хз вообще нужно оно тут или нет, разницы вроде никакой не должно быть. Но Если оно работает - трогать не стоит)
 
 	initInt = 0;
 }
@@ -199,12 +244,6 @@ int tick = 0;
 
 void loop()
 {
-	static uint32_t afkTimer = 0;
-
-	if (millis() - afkTimer >= 10000)
-	{
-		afkTimer = millis(); // сброс таймера
-	}
 
 	// Rtc.GetDateTime();
 	RtcDateTime now = Rtc.GetDateTime();
@@ -217,6 +256,11 @@ void loop()
 		feed();
 	}
 
+	// if (millis() - afkTimer >= 10 * 60) // 10 минут
+	// {
+	// 	afkTimer = millis(); // сброс таймера
+	// }
+
 	// Update the Bounce instance
 	button_up.update();
 	button_down.update();
@@ -224,6 +268,7 @@ void loop()
 	button_right.update();
 
 	// <Bounce>.changed() RETURNS true IF THE STATE CHANGED (FROM HIGH TO LOW OR LOW TO HIGH)
+	// Кнопка ВВЕРХ
 	if (button_up.changed())
 	{
 		if (button_up.read() == HIGH)
@@ -233,6 +278,7 @@ void loop()
 		}
 	}
 
+	// Кнопка ВНИЗ
 	if (button_down.changed())
 	{
 		if (button_down.read() == HIGH && tab > 0)
@@ -242,6 +288,7 @@ void loop()
 		}
 	}
 
+	// ВЛЕВО
 	if (button_left.changed())
 	{
 		if (button_left.read() == HIGH)
@@ -249,121 +296,76 @@ void loop()
 			if (line == 0 && tab > 0)
 			{
 				tab--;
-				tab = constrain(tab, 0, 4);
+				tab = constrain(tab, 0, 2);
 			}
-			else if (tab > 1 && tab != 4)
+			else if (tab == 1)
 			{
-				option_values[tab - 2][line - 1]--;
+				option_values[line - 1]--;
 			}
 		}
 	}
 
+	// ВПРАВО
 	if (button_right.changed())
 	{
 		if (button_right.read() == HIGH)
 		{
-			if (line == 0 && tab < 4)
+			if (line == 0 && tab < 2)
 			{
 				tab++;
-				tab = constrain(tab, 0, 4);
+				tab = constrain(tab, 0, 2);
 			}
-			else if (tab > 1 && tab != 4)
+			else if (tab == 1)
 			{
-				option_values[tab - 2][line - 1]++;
+				option_values[line - 1]++;
 			}
-			else if (tab == 4 && line == 1)
-			{ // save
-				int wake = option_values[0][0];
-				int sleep = option_values[0][1];
-				int feeds = option_values[1][0];
-				int kilos = option_values[1][1];
-				int vibro = option_values[1][2];
-				EEPROM.put(0 * 4, wake);
-				EEPROM.put(1 * 4, sleep);
-				EEPROM.put(2 * 4, feeds);
-				EEPROM.put(3 * 4, kilos);
-				EEPROM.put(4 * 4, vibro);
-			}
-			else if (tab == 4 && line == 2)
-			{ // load
-				int wake = 0;
-				int sleep = 0;
-				int feeds = 0;
-				int kilos = 0;
-				int vibro = 0;
-				EEPROM.get(0 * 4, wake);
-				EEPROM.get(1 * 4, sleep);
-				EEPROM.get(2 * 4, feeds);
-				EEPROM.get(3 * 4, kilos);
-				EEPROM.get(4 * 4, vibro);
-				option_values[0][0] = wake;
-				option_values[0][1] = sleep;
-				option_values[1][0] = feeds;
-				option_values[1][1] = kilos;
-				option_values[1][2] = vibro;
-			}
-			else if (tab == 4 && line == 3)
+			else if (tab == 2)
 			{
-				feed();
+				// int option_values[2]{
+				// 	3, // кол-во кормлений
+				// 	5  // килограммы (в теории)
+				// };
+				if (line == 1)
+				{
+					// save
+					int feeds = option_values[0];
+					int kilos = option_values[1];
+					EEPROM.put(0 * 4, feeds);
+					EEPROM.put(1 * 4, kilos);
+				}
+				else if (line == 2)
+				{
+					// load
+					int feeds = 0;
+					int kilos = 0;
+					EEPROM.get(0 * 4, feeds);
+					EEPROM.get(1 * 4, kilos);
+					option_values[0] = feeds;
+					option_values[1] = kilos;
+				}
+				else if (line == 3)
+				{
+					feed();
+				}
 			}
 		}
 	}
-	// int option_values[2][3]{
-	// {12, 44, 0},
-	// {3, 2, 5}};
 
-	if (option_values[0][0] < 0)
-	{
-		option_values[0][0] = 0;
-	}
-	if (option_values[0][0] > 46)
-	{
-		option_values[0][0] = 46;
-	}
+	// int option_values[2]{
+	// 	3,	//кол-во кормлений
+	// 	5	//килограммы (в теории)
+	// };
+	// Держим значения параметров в допустимом диапазоне
 
-	if (option_values[0][1] < 2)
-	{
-		option_values[0][1] = 2;
-	}
-	if (option_values[0][1] > 46)
-	{
-		option_values[0][1] = 46;
-	}
+	// На всякий случай
+	tab = constrain(tab, 0, 2);
+	line = constrain(line, 0, 3);
 
-	// 10 + 1 > 2
-	// 2 -> 10
-	// 10 + 1 > 10
-	if (option_values[0][0] + 1 > option_values[0][1])
-	{
-		option_values[0][1] = option_values[0][0] + 1;
-	}
+	// кол-во кормлений
+	option_values[0] = constrain(option_values[0], 0, 50);
 
-	if (option_values[1][0] < 0)
-	{
-		option_values[1][0] = 0;
-	}
-	if (option_values[1][0] > 20)
-	{
-		option_values[1][0] = 20;
-	}
-
-	if (option_values[1][1] < 0)
-	{
-		option_values[1][1] = 0;
-	}
-	if (option_values[1][1] > 255)
-	{
-		option_values[1][1] = 255;
-	}
-
-	if (option_values[1][2] < 0)
-	{
-		option_values[1][2] = 0;
-	}
-	if (option_values[1][2] > 10)
-	{
-		option_values[1][2] = 10;
-	}
+	// килограммы (в теории)
+	option_values[1] = constrain(option_values[1], 0, 50);
 
 	if ( // Если была отпущена любая кнопка
 		(button_up.changed() && button_up.read() == HIGH) ||
@@ -372,12 +374,12 @@ void loop()
 		(button_right.changed() && button_right.read() == HIGH) ||
 		initInt == 0)
 	{
+
 		initInt = 1;
 		// LCD
-		lcd.display();
 		lcd.clear();
 		lcd.setCursor(0, 0);
-		lcd.print(" i  &  @  #  s");
+		lcd.print(" i  #  s");
 		if (line == 0)
 		{
 			lcd.setCursor(tab * 3, 0);
@@ -402,20 +404,12 @@ void loop()
 				lcd.print(options_to_print[tab][i]);
 			}
 
-			if (tab > 1 && tab != 4)
+			if (tab == 1)
 			{
-				if (tab == 2)
-				{
-					lcd.setCursor(options_to_print[tab][i].length() + 1, i + 1);
-					lcd.print(halfHoursToTime(option_values[tab - 2][i]));
-				}
-				else
-				{
-					lcd.setCursor(options_to_print[tab][i].length() + 1, i + 1);
-					lcd.print(option_values[tab - 2][i]);
-				}
+				lcd.setCursor(options_to_print[tab][i].length() + 1, i + 1);
+				lcd.print(option_values[i]);
 			}
-			if (tab == 4 && button_right.changed())
+			if (tab == 2 && button_right.changed())
 			{
 				if (line == 1)
 				{
@@ -441,12 +435,12 @@ void loop()
 		lcd.setCursor(6, 1);
 		lcd.print(buf);
 
-		// lcd.setCursor(1, 2);
-		// lcd.print("Next feed:");
-		// lcd.print(now.Hour());
-		// lcd.print(":");
-		// lcd.print(now.Minute());
-		// lcd.print(":");
-		// lcd.print(now.Second());
+		lcd.setCursor(1, 2);
+		lcd.print("Next feed:");
+		lcd.print(floor(minutesUntilNextFeed(now.Minute()) / 60));
+		lcd.print(":");
+		lcd.print(minutesUntilNextFeed(now.Minute()) / 60);
+		lcd.print(":");
+		lcd.print(60 - now.Second());
 	}
 }
