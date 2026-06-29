@@ -176,6 +176,14 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 
 int stepDelay = 200; // микросекунды между шагами (чем меньше, тем быстрее)
 
+void dyorg()
+{
+	digitalWrite(STEP_PIN, HIGH);
+	delayMicroseconds(stepDelay);
+	digitalWrite(STEP_PIN, LOW);
+	delayMicroseconds(stepDelay);
+}
+
 void feed()
 {
 	digitalWrite(ENA_PIN, LOW);
@@ -187,12 +195,19 @@ void feed()
 	lcd.print("PROGRESS");
 	int feedRevs = option_values[1];
 
-	for (int i = 0; i < stepsPerRevolution * feedRevs; i++)
+	for (int i = 0; i < (stepsPerRevolution / 2) * feedRevs; i++) //stepsPerRevolution поделил на 2. 5 шагов вперёд, 3 назад. 5-3 = 2. Целый один лишний шаг в итоге!
 	{
-		digitalWrite(STEP_PIN, HIGH);
-		delayMicroseconds(stepDelay);
-		digitalWrite(STEP_PIN, LOW);
-		delayMicroseconds(stepDelay);
+		dyorg();
+		dyorg();
+		dyorg();
+		dyorg();
+		dyorg();
+		digitalWrite(DIR_PIN, HIGH); //LOW у нас по дефолту вперёд. Переворачиваем
+		dyorg();
+		dyorg();
+		dyorg();
+		digitalWrite(DIR_PIN, LOW); //Возвращаем как было
+		//Хреново что оно hardcoded, но мне пока в падлу менять это
 	}
 
 	digitalWrite(ENA_PIN, HIGH); // отключить драйвер (хз вообще нужно оно тут или нет, разницы вроде никакой не должно быть. Но Если оно работает - трогать не стоит)
