@@ -176,9 +176,14 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 
 int stepDelay = 200; // микросекунды между шагами (чем меньше, тем быстрее)
 
+<<<<<<< HEAD:shpora/main.cpp
 void step()
 {
 
+=======
+void dyorg()
+{
+>>>>>>> 2abd99e60e8b3ba7f8e351621ed135a619b7379b:src/main.cpp
 	digitalWrite(STEP_PIN, HIGH);
 	delayMicroseconds(stepDelay);
 	digitalWrite(STEP_PIN, LOW);
@@ -196,6 +201,7 @@ void feed()
 	digitalWrite(ENA_PIN, LOW);
 	delay(2);
 
+<<<<<<< HEAD:shpora/main.cpp
 	digitalWrite(DIR_PIN, LOW); // ПОМЕНЯТЬ НА LOW ДЛЯ ВРАЩЕНИЯ В ДРУГУЮ СТОРОНУ (в setup() тоже есть)
 	delay(2);
 	for (long i = 0; i < ((long)stepsPerRevolution * feedRevs) / 2; i++)
@@ -221,6 +227,21 @@ void feed()
 			delay(2);
 			// digitalWrite(ENA_PIN, LOW);
 		}
+=======
+	for (int i = 0; i < (stepsPerRevolution / 2) * feedRevs; i++) //stepsPerRevolution поделил на 2. 5 шагов вперёд, 3 назад. 5-3 = 2. Целый один лишний шаг в итоге!
+	{
+		dyorg();
+		dyorg();
+		dyorg();
+		dyorg();
+		dyorg();
+		digitalWrite(DIR_PIN, HIGH); //LOW у нас по дефолту вперёд. Переворачиваем
+		dyorg();
+		dyorg();
+		dyorg();
+		digitalWrite(DIR_PIN, LOW); //Возвращаем как было
+		//Хреново что оно hardcoded, но мне пока в падлу менять это
+>>>>>>> 2abd99e60e8b3ba7f8e351621ed135a619b7379b:src/main.cpp
 	}
 
 	digitalWrite(ENA_PIN, HIGH); // отключить драйвер (хз вообще нужно оно тут или нет, разницы вроде никакой не должно быть. Но Если оно работает - трогать не стоит)
