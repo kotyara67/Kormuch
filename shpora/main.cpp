@@ -1,7 +1,7 @@
 // НАСТРОЙКА ПАРАМЕТРОВ ПОВЕДЕНИЯ
 
-int time_morning = 12; // В получасах. 12 = 6 утра
-int time_sleep = 44;   // Я хз что будет, если выставить time_morning <= time_sleep. Проверять не рекомендуется.
+int time_morning = 8 * 2; // В получасах. 12 = 6 утра
+int time_sleep = 19 * 2;  // Я хз что будет, если выставить time_morning <= time_sleep. Проверять не рекомендуется.
 // int mins_to_afk = 10;  // период неактивности
 
 int option_values[3]{
@@ -57,7 +57,7 @@ int initInt = 0;
 
 String options_to_print[3][3]{
 	{"Time:", "Next feed:", ""},
-	{"Feeds:", "Kilos:", ""},
+	{"Feeds:", "Kg:", ""},
 	{"Save", "Load", "TEST FEED"}
 	// Дата Время       Дтя
 	// Утро Сон  Еда    дн
@@ -69,7 +69,7 @@ String options_to_print[3][3]{
 int lastFeedMinute = -1;
 int lastDate = -1;
 
-const int stepsPerRevolution = 200; // для NEMA23 1.8° (200 шагов/оборот)
+const int stepsPerRevolution = 400; // для NEMA23 1.8° (200 шагов/оборот)
 
 String halfHoursToTime(int halfHours)
 {
@@ -176,23 +176,51 @@ bool checkAndFeed(int currentMinutes, int currentDay)
 
 int stepDelay = 200; // микросекунды между шагами (чем меньше, тем быстрее)
 
+void step()
+{
+
+	digitalWrite(STEP_PIN, HIGH);
+	delayMicroseconds(stepDelay);
+	digitalWrite(STEP_PIN, LOW);
+	delayMicroseconds(stepDelay);
+}
+
 void feed()
 {
+	lcd.clear();
+	lcd.setCursor(5, 1);
+	lcd.print("FEEDING IN");
+	lcd.setCursor(6, 2);
+	lcd.print("PROGRESS"); //--------- 👇 вот это значение - коэффицент.
+	int feedRevs = option_values[1] * 250;
 	digitalWrite(ENA_PIN, LOW);
 	delay(2);
-	lcd.clear();
-	lcd.setCursor(2, 1);
-	lcd.print("FEEDING IN");
-	lcd.setCursor(4, 2);
-	lcd.print("PROGRESS");
-	int feedRevs = option_values[1];
 
-	for (int i = 0; i < stepsPerRevolution * feedRevs; i++)
+	digitalWrite(DIR_PIN, LOW); // ПОМЕНЯТЬ НА LOW ДЛЯ ВРАЩЕНИЯ В ДРУГУЮ СТОРОНУ (в setup() тоже есть)
+	delay(2);
+	for (long i = 0; i < ((long)stepsPerRevolution * feedRevs) / 2; i++)
 	{
-		digitalWrite(STEP_PIN, HIGH);
-		delayMicroseconds(stepDelay);
-		digitalWrite(STEP_PIN, LOW);
-		delayMicroseconds(stepDelay);
+		// Начальное направление
+		step();
+		if (i % 1000 == 0)
+		{
+			// lcd.setCursor(3, 3);
+			// lcd.print(i / (((long)stepsPerRevolution * feedRevs) / 2));
+			// lcd.print("%");
+			// digitalWrite(ENA_PIN, HIGH);
+			delay(2);
+			digitalWrite(DIR_PIN, LOW);
+			delay(2);
+			// digitalWrite(ENA_PIN, LOW);
+		}
+		if (i % 1000 == 1000 - 200)
+		{
+			// digitalWrite(ENA_PIN, HIGH);
+			delay(2);
+			digitalWrite(DIR_PIN, HIGH);
+			delay(2);
+			// digitalWrite(ENA_PIN, LOW);
+		}
 	}
 
 	digitalWrite(ENA_PIN, HIGH); // отключить драйвер (хз вообще нужно оно тут или нет, разницы вроде никакой не должно быть. Но Если оно работает - трогать не стоит)
@@ -216,7 +244,7 @@ void setup()
 	digitalWrite(ENA_PIN, HIGH);
 
 	// Начальное направление
-	digitalWrite(DIR_PIN, LOW); // ПОМЕНЯТЬ НА LOW ДЛЯ ВРАЩЕНИЯ В ДРУГУЮ СТОРОНУ
+	digitalWrite(DIR_PIN, LOW); // ПОМЕНЯТЬ НА LOW ДЛЯ ВРАЩЕНИЯ В ДРУГУЮ СТОРОНУ (в feed() Тоже есть)
 
 	Serial.begin(9600);		  // Установка последовательной связи на скорости 9600
 	Serial.print("Data: ");	  // Отправка данных на последовательный порт
@@ -443,12 +471,16 @@ void loop()
 		lcd.setCursor(6, 1);
 		lcd.print(buf);
 
+		int currentTotalMinutes = now.Hour() * 60 + now.Minute();
+		int remain = minutesUntilNextFeed(currentTotalMinutes);
+		int hrs = remain / 60;
+		int mins = remain % 60;
+		int secs = 59 - now.Second();
 		lcd.setCursor(1, 2);
-		lcd.print("Next feed:");
-		lcd.print(floor(minutesUntilNextFeed(now.Minute()) / 60));
-		lcd.print(":");
-		lcd.print(minutesUntilNextFeed(now.Minute()) / 60);
-		lcd.print(":");
-		lcd.print(60 - now.Second());
+		char nextBuf[18];
+		sprintf(nextBuf, "Next feed:%02d:%02d:%02d", hrs, mins, secs);
+		lcd.print("                    ");
+		lcd.setCursor(1, 2);
+		lcd.print(nextBuf);
 	}
 }
