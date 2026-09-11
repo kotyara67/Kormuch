@@ -1,0 +1,18 @@
+#	####################################################
+#	СИНТАКСИЧЕСКАЯ РАСКРАСКА ДЛЯ БИБИЛИОТЕКИ:
+#	iarduino_ACS712
+#	####################################################
+#	ТИПЫ ДАННЫХ:							   (KEYWORD1)
+	iarduino_ACS712	KEYWORD1
+#	####################################################
+#	МЕТОДЫ И ФУНКЦИИ:						   (KEYWORD2)
+	readDC	KEYWORD2
+	readAC	KEYWORD2
+	getZeroVDC	KEYWORD2
+	getZeroVAC	KEYWORD2
+	setZeroVDC	KEYWORD2
+	setZeroVAC	KEYWORD2
+	calibrationDC	KEYWORD2
+	calibrationAC	KEYWORD2
+#	####################################################
+#	КОНСТАНТЫ:								   (LITERAL1)

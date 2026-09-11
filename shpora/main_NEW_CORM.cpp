@@ -2,32 +2,41 @@
 
 int time_morning = 8 * 2; // В получасах. 12 = 6 утра
 int time_sleep = 19 * 2;  // Я хз что будет, если выставить time_morning <= time_sleep. Проверять не рекомендуется.
-// int mins_to_afk = 10;  // период неактивности
 
-int option_values[3]{
-    3, // кол-во кормлений
-    5, // килограммы (в теории)
-
-    0 // ОНО ТУТ НАДО. из интерфейса кормушки можно случийно получить доступ к третьей опции, хотя у нас ее нет.
-      // Однако программа все равно попытается изменить значение вне диапозона массива. 0 предотвращает краш программы.
+int option_values[2]{
+    2, // кол-во кормлений
+    1, // килограммы (в теории)
 };
+
+#define MOTOR_PIN 3
+
+#define RTC_DAT 7
+#define RTC_CLK 8
+#define RTC_RST 6
+
+#define ACS712_PIN A0
+
+#define RX_PIN 11 // идет в TX модуля
+#define TX_PIN 12 // идет в RX модуля
+
+#define LED_PIN 13
 
 #include <Arduino.h>
 // Память
-// #include <EEPROM.h>
+#include <EEPROM.h>
 // RTC
 #include <RtcDS1302.h>
 
-ThreeWire myWire(9, 8, 10); // DAT, CLK, RST
+#include <SoftwareSerial.h>
+
+#include <iarduino_ACS712.h>
+
+SoftwareSerial mySerial(RX_PIN, TX_PIN); // RX, TX
+
+iarduino_ACS712 sensor(ACS712_PIN);
+
+ThreeWire myWire(RTC_DAT, RTC_CLK, RTC_RST); // DAT, CLK, RST
 RtcDS1302<ThreeWire> Rtc(myWire);
-
-// Пины для TB6600
-#define STEP_PIN 10 // PUL
-#define DIR_PIN 11  // DIR
-#define ENA_PIN 12  // ENA
-
-// Пин "АФК" транзистора
-// #define STEP_PIN 13 // AFK
 
 // Переменные для защиты от повторного срабатывания
 int lastFeedMinute = -1;
@@ -104,53 +113,50 @@ bool checkAndFeed(int currentMinutes, int currentDay)
     return false;
 }
 
-int stepDelay = 50; // микросекунды между шагами (чем меньше, тем быстрее)
+int stepDelay = 80; // микросекунды между шагами (чем меньше, тем быстрее)
 
 void feed()
 {
-    delay(2);
-    digitalWrite(ENA_PIN, LOW);
-    delay(2);                                // 👇 вот это значение - коэффицент.
-    int feedRevs = option_values[1] * 160.0; // время кормления 50.0 ~ 5 минут при значении 50 кг
+    digitalWrite(MOTOR_PIN, HIGH);
+    delay(10 * 1000 * option_values[1]); // секунды (сколько должно работать для 1 кг) * 1000 (в одной секунде 1000 мс) * КГ
+    digitalWrite(MOTOR_PIN, LOW);
+}
 
-    for (long i = 0; i < (long)stepsPerRevolution * feedRevs; i++)
-    {
-        digitalWrite(STEP_PIN, HIGH);
-        delayMicroseconds(stepDelay);
-        digitalWrite(STEP_PIN, LOW);
-        delayMicroseconds(stepDelay);
-    }
+float readVoltage()
+{
+    float voltage = analogRead(ACS712_PIN) * (5.0 / 1023.0);
+    return voltage;
+}
 
-    digitalWrite(ENA_PIN, HIGH); // отключить драйвер (хз вообще нужно оно тут или нет, разницы вроде никакой не должно быть. Но Если оно работает - трогать не стоит)
+float readCurrent()
+{
+    float voltage = analogRead(ACS712_PIN) * (5.0 / 1023.0);
+    float current = (voltage - 2.5) / 0.066;
+    return current;
 }
 
 void setup()
 {
+    // Мотор отключен по умолчанию
+    pinMode(MOTOR_PIN, OUTPUT);
+    digitalWrite(MOTOR_PIN, LOW);
 
-    // пины для драйвера
-    pinMode(STEP_PIN, OUTPUT);
-    pinMode(DIR_PIN, OUTPUT);
-    pinMode(ENA_PIN, OUTPUT);
+    pinMode(ACS712_PIN, INPUT);
 
-    // Драйвер отключен по умолчанию (активный LOW)
-    digitalWrite(ENA_PIN, HIGH);
+    // set the data rate for the SoftwareSerial port
+    mySerial.begin(9600);
 
-    // Начальное направление
-    digitalWrite(DIR_PIN, LOW); // ПОМЕНЯТЬ НА LOW ДЛЯ ВРАЩЕНИЯ В ДРУГУЮ СТОРОНУ
-
-    Serial.begin(9600);       // Установка последовательной связи на скорости 9600
-    Serial.print("Data: ");   // Отправка данных на последовательный порт
-    Serial.println(__DATE__); // Получение даты и времени с ПК
-    Serial.print("Time: ");   // Отправка данных на последовательный порт
-    Serial.println(__TIME__); // Получение даты и времени с ПК
+    Serial.begin(9600); // Установка последовательной связи на скорости 9600
+    Serial.print("Data: ");
+    Serial.println(__DATE__);
+    Serial.print("Time: ");
+    Serial.println(__TIME__);
     // Инициализация RTC
     Rtc.Begin();
     RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__); // Копирование даты и времени в compiled
-    // Rtc.SetDateTime(compiled); // не сбрасывать время при каждом запуске								// Установка времени
+    // Rtc.SetDateTime(compiled);                              // Установка времени
     Serial.println(); // Отправка данных на последовательный порт
 }
-
-int tick = 0;
 
 void loop()
 {
@@ -161,10 +167,40 @@ void loop()
     int currentMinutes = now.Hour() * 60 + now.Minute();
     int currentDay = now.Year() * 366 + now.Day();
 
-    feed();
+    // feed(); // Раскоментировать это и закоментировать if ниже, чтоб кормило постоянно
 
-    // if (checkAndFeed(currentMinutes, currentDay))
-    // {
-    //     feed();
-    // }
+    if (checkAndFeed(currentMinutes, currentDay))
+    {
+        // feed();
+    }
+
+    if (millis() % 100 == 0)
+    {
+        // float v = sensor.getZeroVDC();
+
+        // mySerial.print("Sensor zero V: ");
+        // mySerial.println(v);
+        // Serial.println(v);
+
+        // mySerial.print("Voltage: ");
+        // mySerial.println(readVoltage());
+        // //
+        // mySerial.print("Current: ");
+        // mySerial.println(readCurrent());
+        //
+        // mySerial.print("time: ");
+        // mySerial.print(now.Hour());
+        // mySerial.print(":");
+        // mySerial.print(now.Minute());
+        // mySerial.print(":");
+        // mySerial.println(now.Second());
+    }
+
+    // с модуля на комп
+    if (mySerial.available())
+    {
+        byte b = mySerial.read();
+        Serial.print(b, HEX);
+        Serial.print(" ");
+    }
 }
